@@ -30,7 +30,7 @@ pyautogui.press('enter')
 
 # Passo 3: Importar a base de dados dos produtos
 
-tabela = pandas.read_csv("D:\JornadaPython\produtos.csv")
+tabela = pandas.read_csv("caminho_do_csv")
 display(tabela)
 
 
