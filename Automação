@@ -11,7 +11,7 @@ pyautogui.keyDown('alt')
 pyautogui.press('tab')
 pyautogui.keyUp('alt')
 pyautogui.hotkey("ctrl", "t")
-pyautogui.write("https://dlp.hashtagtreinamentos.com/python/intensivao/login") # Local fictício, coloque o certo
+pyautogui.write("https:/login") # Local fictício, coloque o certo
 pyautogui.press("enter")
 time.sleep(1)
 pyautogui.PAUSE = 0.5
@@ -21,7 +21,7 @@ pyautogui.PAUSE = 0.5
 # Passo 2: Fazer login
 
 pyautogui.click(x=808, y=298)
-pyautogui.write("ejzamar007@gmail.com")
+pyautogui.write("seu_email_aqui")
 pyautogui.press('tab')
 pyautogui.write('abcd1234')
 pyautogui.press('tab')
