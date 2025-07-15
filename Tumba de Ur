@@ -1,0 +1,301 @@
+import pygame
+import random
+import sys
+import json
+import os
+
+# Define o caminho pro PyInstaller encontrar o mp3 depois de empacotar
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+# Inicializa o pygame e a música
+pygame.init()
+pygame.mixer.init()
+pygame.mixer.music.load(resource_path("musica_alem.mp3"))
+pygame.mixer.music.set_volume(0.4)
+pygame.mixer.music.play(-1)   
+WIDTH, HEIGHT = 800, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("A Tumba do Guerreiro Ur")
+
+FONT = pygame.font.SysFont("consolas", 24)
+BIG_FONT = pygame.font.SysFont("consolas", 36)
+
+# Cores
+BLACK = (10, 10, 10)
+DARK_GRAY = (30, 30, 30)
+WHITE = (230, 230, 230)
+RED = (200, 50, 50)
+GREEN = (50, 200, 50)
+BLUE = (50, 50, 200)
+
+# Botão
+class Button:
+    def __init__(self, rect, color, text):
+        self.rect = pygame.Rect(rect)
+        self.color = color
+        self.text = text
+        self.hover = False
+    
+    def draw(self, surface):
+        col = tuple(min(255, c + 40) if self.hover else c for c in self.color)
+        pygame.draw.rect(surface, col, self.rect)
+        txt_surf = FONT.render(self.text, True, WHITE)
+        txt_rect = txt_surf.get_rect(center=self.rect.center)
+        surface.blit(txt_surf, txt_rect)
+    
+    def is_hovered(self, pos):
+        return self.rect.collidepoint(pos)
+
+# Biomas e nomes (exemplos com vários nomes por bioma)
+biomas = {
+    "Lago": [
+        "Lago do Esquecimento",
+        "Lago das Sombras",
+        "Lago da Névoa",
+        "Lago dos Suspiros",
+        "Lago da Lua Quebrada"
+    ],
+    "Montanha": [
+        "Montanha do Sangue Dormente",
+        "Montanha do Eco Sombrio",
+        "Montanha do Grito",
+        "Montanha da Névoa Gelada",
+        "Montanha da Sombra"
+    ],
+    "Caverna": [
+        "Caverna do Primeiro Grito",
+        "Caverna da Penumbra",
+        "Caverna dos Ecos",
+        "Caverna do Abismo",
+        "Caverna da Chama Oculta"
+    ],
+    "Deserto": [
+        "Deserto dos Ossos",
+        "Deserto da Areia Roubada",
+        "Deserto do Sol Partente"
+    ],
+    "Floresta": [
+        "Floresta das Almas Perdidas",
+        "Floresta do Sussurro",
+        "Floresta da Névoa Sombria"
+    ]
+}
+
+MAX_DOORS = 5000
+PERMA_DEATH_START = 2000
+TUMBA_START = 2500
+
+SAVE_FILE = "checkpoint.json"
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+def escolher_bioma():
+    biome = random.choice(list(biomas.keys()))
+    nome = random.choice(biomas[biome])
+    return biome, nome
+
+def salvar_checkpoint(data):
+    with open(SAVE_FILE, "w") as f:
+        json.dump(data, f)
+
+def carregar_checkpoint():
+    if os.path.exists(SAVE_FILE):
+        with open(SAVE_FILE, "r") as f:
+            return json.load(f)
+    return None
+
+class Game:
+    def __init__(self, player_name):
+        self.player_name = player_name
+        self.current_door = 1
+        self.false_doors_count = 0
+        self.dead_count = 0
+        self.current_biome, self.current_biome_name = escolher_bioma()
+        self.load_checkpoint()
+        self.message = "Ur desapareceu, e cabe à você encontrá-lo. Boa sorte."
+
+        # Botões
+        self.btn_left = Button((100, 450, 180, 80), RED, "Esquerda")
+        self.btn_middle = Button((310, 450, 180, 80), GREEN, "Meio")
+        self.btn_right = Button((520, 450, 180, 80), BLUE, "Direita")
+
+    def load_checkpoint(self):
+        data = carregar_checkpoint()
+        if data and data.get("player_name") == self.player_name:
+            self.current_door = data.get("current_door", 1)
+            self.false_doors_count = data.get("false_doors_count", 0)
+            self.dead_count = data.get("dead_count", 0)
+            self.current_biome = data.get("current_biome", "Lago")
+            self.current_biome_name = data.get("current_biome_name", biomas["Lago"][0])
+
+    def save_checkpoint(self):
+        data = {
+            "player_name": self.player_name,
+            "current_door": self.current_door,
+            "false_doors_count": self.false_doors_count,
+            "dead_count": self.dead_count,
+            "current_biome": self.current_biome,
+            "current_biome_name": self.current_biome_name
+        }
+        salvar_checkpoint(data)
+
+    def porta_falsa(self):
+        # Te joga pra trás, entre porta atual e início
+        old_door = self.current_door
+        self.current_door = random.randint(1, self.current_door-1)
+        self.false_doors_count += 1
+        self.message = f"Você caiu numa porta falsa! Voltou da porta {old_door} para {self.current_door}."
+        self.current_biome, self.current_biome_name = escolher_bioma()
+
+    def avancar_porta(self):
+        # Chance de achar a tumba
+        if self.current_door >= TUMBA_START:
+            chance = (self.current_door - TUMBA_START) / (MAX_DOORS - TUMBA_START)
+            if random.random() < chance:
+                self.message = "Parabéns! Você encontrou a Tumba do Guerreiro Ur!"
+                self.save_checkpoint()
+                self.reset_game()
+                return
+        
+        self.current_door += 1
+        self.current_biome, self.current_biome_name = escolher_bioma()
+        self.message = f"Você avançou para a porta {self.current_door}."
+
+        if self.current_door > MAX_DOORS:
+            self.message = "Você chegou ao fim das portas. Parabéns pela jornada!"
+            self.save_checkpoint()
+            self.reset_game()
+            return
+
+        # Portas falsas - 20% de chance
+        if random.random() < 0.20:
+            self.porta_falsa()
+
+        # Permadeath após porta 2000
+        if self.current_door >= PERMA_DEATH_START:
+            self.message += " PERMADEATH ATIVADO! Contador de portas reseta."
+            self.false_doors_count = 0
+            self.dead_count += 1
+            self.save_checkpoint()
+
+    def reset_game(self):
+        self.current_door = 1
+        self.false_doors_count = 0
+        self.message += " Jogo reiniciado."
+        self.current_biome, self.current_biome_name = escolher_bioma()
+
+    def handle_click(self, pos):
+        if self.btn_left.is_hovered(pos):
+            self.avancar_porta()
+        elif self.btn_middle.is_hovered(pos):
+            self.avancar_porta()
+        elif self.btn_right.is_hovered(pos):
+            self.avancar_porta()
+
+    def draw(self):
+        screen.fill(DARK_GRAY)
+
+        # Texto
+        titulo = BIG_FONT.render("A Tumba do Guerreiro Ur", True, WHITE)
+        screen.blit(titulo, (WIDTH//2 - titulo.get_width()//2, 30))
+
+        player_text = FONT.render(f"Jogador: {self.player_name}", True, WHITE)
+        screen.blit(player_text, (50, 100))
+
+        porta_texto = FONT.render(f"Porta atual: {self.current_door}", True, WHITE)
+        screen.blit(porta_texto, (50, 140))
+
+        bioma_texto = FONT.render(f"Bioma: {self.current_biome} - {self.current_biome_name}", True, WHITE)
+        screen.blit(bioma_texto, (50, 180))
+
+        false_text = FONT.render(f"Portas falsas caídas: {self.false_doors_count}", True, WHITE)
+        screen.blit(false_text, (50, 220))
+
+        dead_text = FONT.render(f"Mortes (resets permadeath): {self.dead_count}", True, WHITE)
+        screen.blit(dead_text, (50, 260))
+
+        msg_lines = self.message.split("\n")
+        for i, line in enumerate(msg_lines):
+            msg_text = FONT.render(line, True, WHITE)
+            screen.blit(msg_text, (50, 320 + i * 30))
+
+        # Botões
+        self.btn_left.draw(screen)
+        self.btn_middle.draw(screen)
+        self.btn_right.draw(screen)
+
+def input_player_name():
+    name = ""
+    active = True
+
+    input_rect = pygame.Rect(WIDTH//2 - 150, HEIGHT//2 - 25, 300, 50)
+    color_active = (50, 150, 50)
+    color_inactive = (100, 100, 100)
+    color = color_inactive
+
+    while active:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    if len(name.strip()) > 0:
+                        return name.strip()
+                elif event.key == pygame.K_BACKSPACE:
+                    name = name[:-1]
+                else:
+                    if len(name) < 15:
+                        name += event.unicode
+        
+        screen.fill(BLACK)
+        prompt = BIG_FONT.render("Digite seu nome:", True, WHITE)
+        screen.blit(prompt, (WIDTH//2 - prompt.get_width()//2, HEIGHT//2 - 80))
+
+        pygame.draw.rect(screen, color, input_rect, 2)
+        text_surface = FONT.render(name, True, WHITE)
+        screen.blit(text_surface, (input_rect.x + 10, input_rect.y + 10))
+
+        pygame.display.flip()
+
+def main():
+    player_name = input_player_name()
+    game = Game(player_name)
+
+    clock = pygame.time.Clock()
+    running = True
+
+    while running:
+        clock.tick(30)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                game.save_checkpoint()
+                running = False
+            elif event.type == pygame.MOUSEMOTION:
+                pos = event.pos
+                game.btn_left.hover = game.btn_left.is_hovered(pos)
+                game.btn_middle.hover = game.btn_middle.is_hovered(pos)
+                game.btn_right.hover = game.btn_right.is_hovered(pos)
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                game.handle_click(event.pos)
+
+        game.draw()
+        pygame.display.flip()
+
+    pygame.quit()
+    sys.exit()
+
+if __name__ == "__main__":
+    main()
